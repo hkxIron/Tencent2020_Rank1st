@@ -10,34 +10,34 @@ from gensim.models import Word2Vec
 from sklearn import preprocessing
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 
-def get_agg_features(dfs,f1,f2,agg,log):    
+def get_agg_features(dfs, group_key, stat_value, agg, log):
     #判定特殊情况
-    if type(f1)==str:
-        f1=[f1]
+    if type(group_key)==str:
+        group_key=[group_key]
     if agg!='size':
-        data=log[f1+[f2]]
+        data=log[group_key + [stat_value]]
     else:
-        data=log[f1] 
-    f_name='_'.join(f1)+"_"+f2+"_"+agg     
+        data=log[group_key]
+    f_name='_'.join(group_key) + "_" + stat_value + "_" + agg
     #聚合操作    
     if agg=="size":
-        tmp = pd.DataFrame(data.groupby(f1).size()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key).size()).reset_index()
     elif agg=="count":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].count()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].count()).reset_index()
     elif agg=="mean":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].mean()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].mean()).reset_index()
     elif agg=="unique":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].nunique()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].nunique()).reset_index()
     elif agg=="max":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].max()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].max()).reset_index()
     elif agg=="min":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].min()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].min()).reset_index()
     elif agg=="sum":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].sum()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].sum()).reset_index()
     elif agg=="std":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].std()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].std()).reset_index()
     elif agg=="median":
-        tmp = pd.DataFrame(data.groupby(f1)[f2].median()).reset_index()
+        tmp = pd.DataFrame(data.groupby(group_key)[stat_value].median()).reset_index()
     else:
         raise "agg error"   
     #赋值聚合特征
@@ -46,8 +46,8 @@ def get_agg_features(dfs,f1,f2,agg,log):
             del df[f_name]
         except:
             pass
-        tmp.columns = f1+[f_name]
-        df[f_name]=df.merge(tmp, on=f1, how='left')[f_name] 
+        tmp.columns = group_key + [f_name]
+        df[f_name]=df.merge(tmp, on=group_key, how='left')[f_name]
     del tmp
     del data
     gc.collect()

@@ -1,10 +1,12 @@
-sudo pip install transformers==2.8.0 pandas gensim scikit-learn filelock gdown numpy
+#sudo pip install transformers==2.8.0 pandas gensim scikit-learn filelock gdown numpy
 pip install transformers==2.8.0 pandas gensim scikit-learn filelock gdown numpy
 
+<<EOF
 #数据下载
 gdown https://drive.google.com/uc?id=15onAobxlim_uRUNWSMQuK6VxDsmGTtp4
 unzip data.zip 
 rm data.zip
+EOF
 
 #数据预处理
 python src/preprocess.py

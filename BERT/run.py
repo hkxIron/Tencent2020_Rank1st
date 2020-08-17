@@ -430,14 +430,14 @@ def main():
 
     base_path="../data"
     text_features=[      
-    [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True],
-    [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True],
-    [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128,True],
-    [base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128,True],
-    [base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128,True],
-    [base_path+"/sequence_text_user_id_product_category.128d",'sequence_text_user_id_product_category',128,True],
-    [base_path+"/sequence_text_user_id_time.128d",'sequence_text_user_id_time',128,True],
-    [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128,True],
+        [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True],
+        [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True],
+        [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128,True],
+        [base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128,True],
+        [base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128,True],
+        [base_path+"/sequence_text_user_id_product_category.128d",'sequence_text_user_id_product_category',128,True],
+        [base_path+"/sequence_text_user_id_time.128d",'sequence_text_user_id_time',128,True],
+        [base_path+"/sequence_text_user_id_click_times.128d",'sequence_text_user_id_click_times',128,True],
     ]
 
     #读取训练数据
@@ -455,14 +455,14 @@ def main():
         dic['mask']=1
         dic['unk']=2    
         for feature in text_features: 
-            conter=Counter()
+            counter=Counter()
             for item in train_df[feature[1]].values:
                 for word in item.split():
                     try:
-                        conter[(feature[1],word)]+=1
+                        counter[(feature[1], word)]+=1
                     except:
-                        conter[(feature[1],word)]=1 
-            most_common=conter.most_common(100000)   
+                        counter[(feature[1], word)]=1
+            most_common=counter.most_common(100000)
             cont=0
             for x in most_common:
                 if x[1]>5:
@@ -508,14 +508,14 @@ def main():
     #创建输出端词表，每个域最多保留10w个id
     vocab=[]
     for feature in text_features:
-        conter=Counter()
+        counter=Counter()
         for item in train_data[feature[1]].values:
             for word in item.split():
                 try:
-                    conter[word]+=1
+                    counter[word]+=1
                 except:
-                    conter[word]=1
-        most_common=conter.most_common(100000)
+                    counter[word]=1
+        most_common=counter.most_common(100000)
         dic={}
         for idx,x in enumerate(most_common):
             dic[x[0]]=idx+1    
