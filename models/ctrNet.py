@@ -79,6 +79,7 @@ class ctrNet(nn.Module):
                 del batch
                 model.train()
                 loss = model(dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1,labels)
+
                 if args.n_gpu > 1:
                     loss = loss.mean()  # mean() to average on multi-gpu parallel training 
                 loss.backward()
@@ -86,12 +87,14 @@ class ctrNet(nn.Module):
                 tr_loss += loss.item()
                 tr_num+=1
                 train_loss+=loss.item()
+
                 #输出log
                 if avg_loss==0:
                     avg_loss=tr_loss
                 avg_loss=round(train_loss/tr_num,5)
                 if (step+1) % args.display_steps == 0:
                     logger.info("  epoch {} step {} loss {}".format(idx,step+1,avg_loss))
+
                 #update梯度
                 optimizer.step()
                 optimizer.zero_grad()
@@ -126,6 +129,7 @@ class ctrNet(nn.Module):
                         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
                         output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('age'))
                         torch.save(model_to_save.state_dict(), output_model_file)
+
                     #保存最好的性别结果和模型
                     if results['eval_gender_acc']>best_gender_acc:
                         best_gender_acc=results['eval_gender_acc']
@@ -169,6 +173,7 @@ class ctrNet(nn.Module):
                     model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
                     output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('age'))
                     torch.save(model_to_save.state_dict(), output_model_file)
+
                 #保存最好的性别结果和模型
                 if results['eval_gender_acc']>best_gender_acc:
                     best_gender_acc=results['eval_gender_acc']

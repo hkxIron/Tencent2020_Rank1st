@@ -32,8 +32,8 @@ def merge_files():
     print("merge all files...")
     click_df=click_df.merge(ad_df,on="creative_id",how='left')
     click_df=click_df.merge(train_user,on="user_id",how='left')
-    click_df=click_df.fillna(-1)
-    click_df=click_df.replace("\\N",-1)
+    click_df=click_df.fillna(-1) # 将na替换成-1
+    click_df=click_df.replace("\\N",-1) # 将非法字符替换成-1
     for f in click_df:
         click_df[f]=click_df[f].astype(int)
     for i in range(10):

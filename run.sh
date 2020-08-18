@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #sudo pip install transformers==2.8.0 pandas gensim scikit-learn filelock gdown numpy
 pip install transformers==2.8.0 pandas gensim scikit-learn filelock gdown numpy
 
