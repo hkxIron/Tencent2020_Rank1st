@@ -14,6 +14,7 @@ from src.data_loader import TextDataset
 from torch.utils.data import DataLoader, SequentialSampler, RandomSampler,TensorDataset
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 from sklearn.model_selection import StratifiedKFold
+
 base_path="data"
 #定义浮点数特征
 dense_features=['user_id__size', 'user_id_ad_id_unique', 'user_id_creative_id_unique', 'user_id_advertiser_id_unique', 'user_id_industry_unique', 'user_id_product_id_unique', 'user_id_time_unique', 'user_id_click_times_sum', 'user_id_click_times_mean', 'user_id_click_times_std']
@@ -105,13 +106,13 @@ if __name__ == "__main__":
     train_df['label']=train_df['age']*2+train_df['gender']
     test_df=pd.read_pickle('data/test_user.pkl')
     test_df['label']=test_df['age']*2+test_df['gender']
-    # 将测试集与训练集合并
+    # 将测试集与训练集合并然后进行standardScaler
     df=train_df[args.dense_features].append(test_df[args.dense_features])
-    ss=StandardScaler() # 减均值除方差
-    ss.fit(df[args.dense_features]) # 对于数值特征进行归一化操作
-    train_df[args.dense_features]=ss.transform(train_df[args.dense_features])
+    standard_scaler=StandardScaler() # 减均值除方差
+    standard_scaler.fit(df[args.dense_features]) # 对于数值特征进行归一化操作
+    train_df[args.dense_features]=standard_scaler.transform(train_df[args.dense_features])
 
-    test_df[args.dense_features]=ss.transform(test_df[args.dense_features])
+    test_df[args.dense_features]=standard_scaler.transform(test_df[args.dense_features])
     test_dataset = TextDataset(args, test_df)
     
     #建立模型

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import torch.nn as nn
-from models.model import Model
+from models.classifymodel import ClassifyModel
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import DataLoader,SequentialSampler, RandomSampler
 from transformers import (WEIGHTS_NAME, AdamW, get_linear_schedule_with_warmup,
@@ -33,7 +33,7 @@ class ctrNet(nn.Module):
         args.n_gpu = torch.cuda.device_count()
         args.device = device
         logger.info(" device: %s, n_gpu: %s",device, args.n_gpu)
-        model=Model(args)  
+        model=ClassifyModel(args)
         model.to(args.device)   
         self.model=model
         self.args=args

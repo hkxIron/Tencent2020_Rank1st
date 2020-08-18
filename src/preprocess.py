@@ -19,7 +19,6 @@ def merge_files():
     #合并用户信息
     print("merge user files...")
     train_user=pd.read_csv("data/train_preliminary/user.csv")
-    #train_user=train_user.append(pd.read_csv("data/train_semi_final/user.csv"))
     train_user=train_user.reset_index(drop=True)
     train_user['age']=train_user['age']-1
     train_user['gender']=train_user['gender']-1
@@ -34,14 +33,14 @@ def merge_files():
     click_df=click_df.merge(train_user,on="user_id",how='left')
     click_df=click_df.fillna(-1) # 将na替换成-1
     click_df=click_df.replace("\\N",-1) # 将非法字符替换成-1
+
     for f in click_df:
         click_df[f]=click_df[f].astype(int)
+    # 将性别,年龄转成one-hot
     for i in range(10):
-        click_df['age_{}'.format(i)]=(click_df['age']==i).astype(np.int16) 
+        click_df['age_{}'.format(i)]=(click_df['age']==i).astype(np.int16)  # 将bool值转成int
     for i in range(2):
         click_df['gender_{}'.format(i)]=(click_df['gender']==i).astype(np.int16) 
-    
-    
     return click_df,train_user,test_user
 
 

@@ -16,9 +16,9 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
                     level=logging.INFO)
 
     
-class Model(nn.Module):
+class ClassifyModel(nn.Module):
     def __init__(self,args):
-        super(Model, self).__init__()
+        super(ClassifyModel, self).__init__()
         args.out_size=len(args.dense_features)
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
         self.args=args
@@ -28,12 +28,15 @@ class Model(nn.Module):
         config.output_hidden_states=True
         args.hidden_size=config.hidden_size
         args.num_hidden_layers=config.num_hidden_layers
-        self.text_layer=RobertaModel.from_pretrained(args.pretrained_model_path,config=config) 
-        self.text_linear=nn.Linear(args.text_dim+args.vocab_dim_v1*len(args.text_features), args.hidden_size)
-        logger.info("Load linear from %s",os.path.join(args.pretrained_model_path, "linear.bin"))
+        self.text_layer=RobertaModel.from_pretrained(args.pretrained_model_path, config=config)
+        self.text_linear=nn.Linear(in_features=args.text_dim+args.vocab_dim_v1*len(args.text_features),
+                                   out_features=args.hidden_size)
+        logger.info("Load linear from %s", os.path.join(args.pretrained_model_path, "linear.bin"))
         self.text_linear.load_state_dict(torch.load(os.path.join(args.pretrained_model_path, "linear.bin")))           
         logger.info("Load embeddings from %s",os.path.join(args.pretrained_model_path, "embeddings.bin"))
-        self.text_embeddings=nn.Embedding.from_pretrained(torch.load(os.path.join(args.pretrained_model_path, "embeddings.bin"))['weight'],freeze=True)             
+
+        self.text_embeddings=nn.Embedding.from_pretrained(torch.load(os.path.join(args.pretrained_model_path, "embeddings.bin"))['weight'],
+                                                          freeze=True)
         args.out_size+=args.hidden_size*2
         
         #创建fusion-layer模型，随机初始化
@@ -106,29 +109,27 @@ class Model(nn.Module):
             age_probs=prob.view(-1,10,2).sum(2)
             gender_probs=prob.view(-1,10,2).sum(1)
             return age_probs,gender_probs
-        
 
-            
 class ClassificationHead(nn.Module):
     """Head for sentence-level classification tasks."""
     def __init__(self, args):
         super().__init__()
         self.norm= nn.BatchNorm1d(args.out_size)
         self.dense = nn.Linear(args.out_size, args.linear_layer_size[0])
-        self.norm_1= nn.BatchNorm1d(args.linear_layer_size[0])
+        self.batch_norm_1= nn.BatchNorm1d(args.linear_layer_size[0])
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
         self.dense_1 = nn.Linear(args.linear_layer_size[0], args.linear_layer_size[1])  
-        self.norm_2= nn.BatchNorm1d(args.linear_layer_size[1])
+        self.batch_norm_2= nn.BatchNorm1d(args.linear_layer_size[1])
         self.out_proj = nn.Linear(args.linear_layer_size[1], args.num_label)
 
     def forward(self, features, **kwargs):
         x = self.norm(features)
         x = self.dropout(x)
         x = self.dense(x)
-        x = torch.relu(self.norm_1(x))
+        x = torch.relu(self.batch_norm_1(x))
         x = self.dropout(x)
         x = self.dense_1(x)
-        x = torch.relu(self.norm_2(x))
+        x = torch.relu(self.batch_norm_2(x))
         x = self.dropout(x)        
         x = self.out_proj(x)
         return x
