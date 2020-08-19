@@ -32,7 +32,7 @@ mkdir saved_models
 mkdir saved_models/log
 for((i=0;i<5;i++));  
 do  
-  python pretrain_bert.py \
+  python train_classifier.py \
       --kfold=5 \
       --index=$i \
       --train_batch_size=256 \

@@ -17,13 +17,23 @@ from sklearn.model_selection import StratifiedKFold
 
 base_path="data"
 #定义浮点数特征
-dense_features=['user_id__size', 'user_id_ad_id_unique', 'user_id_creative_id_unique', 'user_id_advertiser_id_unique', 'user_id_industry_unique', 'user_id_product_id_unique', 'user_id_time_unique', 'user_id_click_times_sum', 'user_id_click_times_mean', 'user_id_click_times_std']
+dense_features=['user_id__size',
+                'user_id_ad_id_unique',
+                'user_id_creative_id_unique',
+                'user_id_advertiser_id_unique',
+                'user_id_industry_unique',
+                'user_id_product_id_unique',
+                'user_id_time_unique',
+                'user_id_click_times_sum',
+                'user_id_click_times_mean',
+                'user_id_click_times_std']
+
 for l in ['age_{}'.format(i) for i in range(10)]+['gender_{}'.format(i) for i in range(2)]:
     for feature in ['creative_id', 'ad_id', 'product_id', 'advertiser_id', 'industry']:
         dense_features.append(l +'_' + feature + '_mean')
 
 #定义用户点击的序列特征
-text_features=[
+text_features_flie_and_dim=[
     [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128],
     [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128],
     [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128],
@@ -35,7 +45,7 @@ text_features=[
 ]
 
 #定义用户点击的人工构造序列特征
-text_features_1=[       
+text_features_1_file_and_dim=[
     [base_path+"/sequence_text_user_id_creative_id_fold.12d",'sequence_text_user_id_creative_id_fold',12],
     [base_path+"/sequence_text_user_id_ad_id_fold.12d",'sequence_text_user_id_ad_id_fold',12],
     [base_path+"/sequence_text_user_id_product_id_fold.12d",'sequence_text_user_id_product_id_fold',12],
@@ -72,21 +82,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     #设置参数
-    args.hidden_size=sum([x[-1] for x in text_features])
+    args.hidden_size=sum([x[-1] for x in text_features_flie_and_dim])
     logger.info("Argument %s", args)    
     args.vocab=pickle.load(open(os.path.join(args.pretrained_model_path, "vocab.pkl"),'rb'))
     args.vocab_size_v1=len(args.vocab)
-    args.text_features=text_features
-    args.text_features_1=text_features_1
-    args.dense_features=dense_features
+    args.text_features_file_and_dim=text_features_flie_and_dim
+    args.text_features_1_files_and_dim=text_features_1_file_and_dim
+    args.dense_features = dense_features
     args.linear_layer_size=[1024,512]
-    args.text_dim=sum([x[-1] for x in text_features])
-    args.text_dim_1=sum([x[-1] for x in text_features_1])
+    args.text_dim=sum([x[-1] for x in text_features_flie_and_dim])
+    args.text_dim_1=sum([x[-1] for x in text_features_1_file_and_dim])
     args.output_dir="saved_models/index_{}".format(args.index)
     
     #读取word2vector模型
     args.embeddings_tables={}
-    for x in args.text_features:
+    for x in args.text_features_file_and_dim:
         if x[0] not in args.embeddings_tables:
             try:
                 args.embeddings_tables[x[0]]=gensim.models.KeyedVectors.load_word2vec_format(x[0],binary=False)  
@@ -94,7 +104,7 @@ if __name__ == "__main__":
                 args.embeddings_tables[x[0]]=pickle.load(open(x[0],'rb'))
 
     args.embeddings_tables_1={}
-    for x in args.text_features_1:
+    for x in args.text_features_1_files_and_dim:
         if x[0] not in args.embeddings_tables_1:
             try:
                 args.embeddings_tables_1[x[0]]=gensim.models.KeyedVectors.load_word2vec_format(x[0],binary=False)  
@@ -106,6 +116,7 @@ if __name__ == "__main__":
     train_df['label']=train_df['age']*2+train_df['gender']
     test_df=pd.read_pickle('data/test_user.pkl')
     test_df['label']=test_df['age']*2+test_df['gender']
+
     # 将测试集与训练集合并然后进行standardScaler
     df=train_df[args.dense_features].append(test_df[args.dense_features])
     standard_scaler=StandardScaler() # 减均值除方差
@@ -117,7 +128,7 @@ if __name__ == "__main__":
     
     #建立模型
     skf=StratifiedKFold(n_splits=5,random_state=2020,shuffle=True) # k折交叉验证
-    model=ctrNet.ctrNet(args)
+    ctr_model=ctrNet.ctrNet(args)
     
     #训练模型
     for i,(train_index, test_index) in enumerate(skf.split(train_df,train_df['label'])):
@@ -126,27 +137,27 @@ if __name__ == "__main__":
         logger.info("Index: %s",args.index)
         train_dataset = TextDataset(args,train_df.iloc[train_index])
         dev_dataset=TextDataset(args,train_df.iloc[test_index])
-        model.train(train_dataset,dev_dataset)
+        ctr_model.train(train_dataset, dev_dataset)
         dev_df=train_df.iloc[test_index]
     
     #输出结果
     accs=[]
     for feature, num in [('age', 10), ('gender', 2)]:
-        model.reload(feature)
+        ctr_model.reload(feature)
         if feature== "age":
-            dev_preds = model.infer(dev_dataset)[0]
+            dev_preds = ctr_model.infer(dev_dataset)[0]
         else:
-            dev_preds = model.infer(dev_dataset)[1]
+            dev_preds = ctr_model.infer(dev_dataset)[1]
 
         for j in range(num):
             dev_df['{}_{}'.format(feature, j)]=np.round(dev_preds[:, j], 4)
-        acc=model.eval(dev_df[feature].values, dev_preds)['eval_acc']
+        acc=ctr_model.eval(dev_df[feature].values, dev_preds)['eval_acc']
         accs.append(acc)
 
         if feature== "age":
-            test_preds=model.infer(test_dataset)[0]
+            test_preds=ctr_model.infer(test_dataset)[0]
         else:
-            test_preds=model.infer(test_dataset)[1]
+            test_preds=ctr_model.infer(test_dataset)[1]
 
         logger.info("Test %s %s", feature, np.mean(test_preds, 0))
         logger.info("ACC %s %s", feature, round(acc, 5))

@@ -126,7 +126,7 @@ class ctrNet(nn.Module):
                             os.system("mkdir -p {}".format(args.output_dir))
                         except:
                             pass
-                        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+                        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the ctr_model it-self
                         output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('age'))
                         torch.save(model_to_save.state_dict(), output_model_file)
 
@@ -140,7 +140,7 @@ class ctrNet(nn.Module):
                             os.system("mkdir -p {}".format(args.output_dir))
                         except:
                             pass
-                        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+                        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the ctr_model it-self
                         output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('gender'))
                         torch.save(model_to_save.state_dict(), output_model_file)
                     logger.info("  best_acc = %s",round(best_age_acc+best_gender_acc,4)) 
@@ -170,7 +170,7 @@ class ctrNet(nn.Module):
                         os.system("mkdir -p {}".format(args.output_dir))
                     except:
                         pass
-                    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+                    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the ctr_model it-self
                     output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('age'))
                     torch.save(model_to_save.state_dict(), output_model_file)
 
@@ -184,13 +184,13 @@ class ctrNet(nn.Module):
                         os.system("mkdir -p {}".format(args.output_dir))
                     except:
                         pass
-                    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+                    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the ctr_model it-self
                     output_model_file = os.path.join(args.output_dir, "pytorch_model_{}.bin".format('gender'))
                     torch.save(model_to_save.state_dict(), output_model_file)
                 logger.info("  best_acc = %s",round(best_age_acc+best_gender_acc,4)) 
 
 
-    def infer(self,eval_dataset):
+    def infer(self, eval_dataset):
         #预测年龄和性别的概率分布
         args=self.args
         model=self.model        
@@ -202,14 +202,17 @@ class ctrNet(nn.Module):
         gender_probs=[]
         model.eval()      
         for batch in eval_dataloader:       
-            _,dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1=(x.to(args.device) for x in batch) 
+            _,dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1=(x.to(args.device) for x in batch)
+
             with torch.no_grad():
-                probs_1,probs_2 = model(dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1)  
+                probs_1,probs_2 = model(dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1)
+
             age_probs.append(probs_1.cpu().numpy()) 
             gender_probs.append(probs_2.cpu().numpy()) 
 
         age_probs=np.concatenate(age_probs,0)
         gender_probs=np.concatenate(gender_probs,0)
+
         return age_probs,gender_probs
     
     def eval(self,labels,preds):
@@ -225,7 +228,7 @@ class ctrNet(nn.Module):
         model=self.model
         args=self.args
         args.load_model_path=os.path.join(args.output_dir, "pytorch_model_{}.bin".format(label))
-        logger.info("Load model from %s",args.load_model_path)
-        model_to_load = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+        logger.info("Load ctr_model from %s",args.load_model_path)
+        model_to_load = model.module if hasattr(model, 'module') else model  # Only save the ctr_model it-self
         model_to_load.load_state_dict(torch.load(args.load_model_path))        
         

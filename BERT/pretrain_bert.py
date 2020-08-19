@@ -218,7 +218,7 @@ def train(args, train_dataset,dev_dataset, model):
                         results = evaluate(args, model, dev_dataset)
                         for key, value in results.items():
                             logger.info("  %s = %s", key, round(value,4))                    
-                        # Save model checkpoint
+                        # Save ctr_model checkpoint
                         output_dir = os.path.join(args.output_dir, '{}-{}-{}'.format(checkpoint_prefix, global_step,round(results['perplexity'],4)))
 
                     if not os.path.exists(output_dir):
@@ -227,7 +227,7 @@ def train(args, train_dataset,dev_dataset, model):
                     #保存模型
                     model_to_save = model.module.encoder if hasattr(model,'module') else model.encoder  # Take care of distributed/parallel training
                     model_to_save.save_pretrained(output_dir)
-                    logger.info("Saving model checkpoint to %s", output_dir)
+                    logger.info("Saving ctr_model checkpoint to %s", output_dir)
                     
                     logger.info("Saving linear to %s",os.path.join(args.output_dir, "linear.bin"))  
                     model_to_save_linear = model.module.text_linear if hasattr(model, 'module') else model.text_linear
@@ -247,9 +247,9 @@ def train(args, train_dataset,dev_dataset, model):
                     logger.info("Saving embeddings to %s",os.path.join(last_output_dir, "embeddings.bin"))  
                     model_to_save_embeddings = model.module.text_embeddings if hasattr(model, 'module') else model.text_embeddings
                     torch.save(model_to_save_embeddings.state_dict(), os.path.join(last_output_dir, "embeddings.bin"))
-                    logger.info("Saving model to %s",os.path.join(last_output_dir, "model.bin"))  
+                    logger.info("Saving ctr_model to %s",os.path.join(last_output_dir, "ctr_model.bin"))
                     model_to_save = model.module if hasattr(model, 'module') else model
-                    torch.save(model_to_save.state_dict(), os.path.join(last_output_dir, "model.bin"))
+                    torch.save(model_to_save.state_dict(), os.path.join(last_output_dir, "ctr_model.bin"))
 
 
                     idx_file = os.path.join(last_output_dir, 'idx_file.txt')
@@ -302,16 +302,16 @@ def main():
 
     ## Required parameters
     parser.add_argument("--output_dir", default=None, type=str, required=True,
-                        help="The output directory where the model predictions and checkpoints will be written.")
+                        help="The output directory where the ctr_model predictions and checkpoints will be written.")
 
     ## Other parameters
     parser.add_argument("--eval_data_file", default=None, type=str,
                         help="An optional input evaluation data file to evaluate the perplexity on (a text file).")
 
     parser.add_argument("--model_type", default="bert", type=str,
-                        help="The model architecture to be fine-tuned.")
+                        help="The ctr_model architecture to be fine-tuned.")
     parser.add_argument("--model_name_or_path", default=None, type=str,
-                        help="The model checkpoint for weights initialization.")
+                        help="The ctr_model checkpoint for weights initialization.")
 
     parser.add_argument("--mlm", action='store_true',
                         help="Train with masked-language modeling loss instead of language modeling.")
@@ -327,11 +327,11 @@ def main():
     parser.add_argument("--block_size", default=-1, type=int,
                         help="Optional input sequence length after tokenization."
                              "The training dataset will be truncated in block of this size for training."
-                             "Default to the model max input length for single sentence inputs (take into account special tokens).")
+                             "Default to the ctr_model max input length for single sentence inputs (take into account special tokens).")
     parser.add_argument("--dfg_size", default=64, type=int,
                         help="Optional input sequence length after tokenization."
                              "The training dataset will be truncated in block of this size for training."
-                             "Default to the model max input length for single sentence inputs (take into account special tokens).")    
+                             "Default to the ctr_model max input length for single sentence inputs (take into account special tokens).")
     parser.add_argument("--do_train", action='store_true',
                         help="Whether to run training.")
     parser.add_argument("--do_eval", action='store_true',
@@ -339,7 +339,7 @@ def main():
     parser.add_argument("--evaluate_during_training", action='store_true',
                         help="Run evaluation during training at each logging step.")
     parser.add_argument("--do_lower_case", action='store_true',
-                        help="Set this flag if you are using an uncased model.")
+                        help="Set this flag if you are using an uncased ctr_model.")
 
     parser.add_argument("--per_gpu_train_batch_size", default=4, type=int,
                         help="Batch size per GPU/CPU for training.")
@@ -422,7 +422,7 @@ def main():
             with open(step_file, encoding='utf-8') as stepf:
                 args.start_step = int(stepf.readlines()[0].strip())
 
-        logger.info("reload model from {}, resume from {} epoch".format(checkpoint_last, args.start_epoch))
+        logger.info("reload ctr_model from {}, resume from {} epoch".format(checkpoint_last, args.start_epoch))
 
     
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
@@ -534,8 +534,8 @@ def main():
     model=Model(model,config,args)   
     #如果有checkpoint，读取checkpoint
     if os.path.exists(checkpoint_last) and os.listdir(checkpoint_last):
-        logger.info("Load model from %s",os.path.join(checkpoint_last, "model.bin"))
-        model.load_state_dict(torch.load(os.path.join(checkpoint_last, "model.bin"))) 
+        logger.info("Load ctr_model from %s",os.path.join(checkpoint_last, "ctr_model.bin"))
+        model.load_state_dict(torch.load(os.path.join(checkpoint_last, "ctr_model.bin")))
 
     #训练      
     train(args, train_dataset,dev_dataset, model)

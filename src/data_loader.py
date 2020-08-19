@@ -19,6 +19,7 @@ class TextDataset(Dataset):
         self.embeddings_tables=[]
         for x in args.text_features:
             self.embeddings_tables.append(args.embeddings_tables[x[0]] if x[0] is not None else None)
+
         self.embeddings_tables_1=[]
         for x in args.text_features_1:
             self.embeddings_tables_1.append(args.embeddings_tables_1[x[0]] if x[0] is not None else None)            
@@ -51,6 +52,7 @@ class TextDataset(Dataset):
                     except:
                         text_ids[w_idx,idx]=self.args.vocab['unk']
                 begin_dim=end_dim
+
         #decoder的输入特征        
         if len(self.args.text_features_1)==0:
             text_features_1=0
