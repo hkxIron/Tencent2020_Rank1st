@@ -159,19 +159,19 @@ if __name__ == "__main__":
         else:
             test_preds=ctr_model.infer(test_dataset)[1]
 
-        logger.info("Test %s %s", feature, np.mean(test_preds, 0))
-        logger.info("ACC %s %s", feature, round(acc, 5))
+            logger.info("Test %s %s", feature, np.mean(test_preds, 0))
+            logger.info("ACC %s %s", feature, round(acc, 5))
 
-        out_fs=['user_id','age','gender','predict_{}'.format(feature)]
-        out_fs+=['{}_{}'.format(feature, i) for i in range(num)]
-        for i in range(num):
-            test_df['{}_{}'.format(feature, i)]=np.round(test_preds[:, i], 4)
-        test_df['predict_{}'.format(feature)]= np.argmax(test_preds, -1) + 1
-        try:
-            os.system("mkdir submission")
-        except:
-            pass
+            out_fs=['user_id','age','gender','predict_{}'.format(feature)]
+            out_fs+=['{}_{}'.format(feature, i) for i in range(num)]
+            for i in range(num):
+                test_df['{}_{}'.format(feature, i)]=np.round(test_preds[:, i], 4)
+            test_df['predict_{}'.format(feature)]= np.argmax(test_preds, -1) + 1
+            try:
+                os.system("mkdir submission")
+            except:
+                pass
 
-        test_df[out_fs].to_csv('submission/submission_test_{}_{}_{}.csv'.format(feature, args.index, round(acc, 5)), index=False)
+            test_df[out_fs].to_csv('submission/submission_test_{}_{}_{}.csv'.format(feature, args.index, round(acc, 5)), index=False)
         
     logger.info("  best_acc = %s",round(sum(accs),4))

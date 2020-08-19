@@ -33,7 +33,7 @@ class ctrNet(nn.Module):
         args.n_gpu = torch.cuda.device_count()
         args.device = device
         logger.info(" device: %s, n_gpu: %s",device, args.n_gpu)
-        model=ClassifyModel(args)
+        model= ClassifyModel(args)
         model.to(args.device)   
         self.model=model
         self.args=args
@@ -202,12 +202,12 @@ class ctrNet(nn.Module):
         gender_probs=[]
         model.eval()      
         for batch in eval_dataloader:       
-            _,dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1=(x.to(args.device) for x in batch)
-
+            _,dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1 = (x.to(args.device) for x in batch)
             with torch.no_grad():
+                # forward前向传播
                 probs_1,probs_2 = model(dense_features,text_features,text_ids,text_masks,text_features_1,text_masks_1)
 
-            age_probs.append(probs_1.cpu().numpy()) 
+            age_probs.append(probs_1.cpu().numpy())
             gender_probs.append(probs_2.cpu().numpy()) 
 
         age_probs=np.concatenate(age_probs,0)

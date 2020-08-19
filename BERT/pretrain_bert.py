@@ -43,7 +43,7 @@ except:
 
 from tqdm import tqdm, trange
 import multiprocessing
-from model import Model
+from bertmodel import BertModel
 cpu_cont = 4
 from transformers import (WEIGHTS_NAME, AdamW, get_linear_schedule_with_warmup,
                           RobertaConfig, RobertaModel, RobertaTokenizer)
@@ -56,7 +56,9 @@ MODEL_CLASSES = {
 
 class TextDataset(Dataset):
     def __init__(self, args,df,embedding_table):
-        self.text_features=[df[x[1]].values for x in args.text_features]
+        # text_features是取id所对应的embedding
+        # text_features:[feature_num, embeddings]
+        self.text_features=[df[x[1]].values for x in args.text_features] # args.text_features:[vector, id, dim, istrain]
         self.embedding_table=embedding_table
         self.args=args
         self.vocab=[list(x) for x in args.vocab]
@@ -66,46 +68,55 @@ class TextDataset(Dataset):
 
     def __getitem__(self, i):  
         text_features=np.zeros((self.args.block_size,self.args.text_dim))
-        text_ids=np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)
-        text_masks=np.zeros(self.args.block_size) 
-        text_label=np.zeros((self.args.block_size,len(self.args.text_features)),dtype=np.int64)-100
+        text_ids=np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)
+        text_masks=np.zeros(self.args.block_size)
+        text_label=np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)-100
         begin_dim=0
-        #选择20%的token进行掩码，其中80%设为[mask], 10%设为[UNK],10%随机选择
-        for idx,x in enumerate(self.args.text_features):
-            end_dim=begin_dim+x[2]
-            for word_idx,word in enumerate(self.text_features[idx][i].split()[:self.args.block_size]):
+
+        #选择20%的token进行掩码，其中80%设为[mask], 10%保持不变,10%随机选择
+        for feat_idx, vector_id_dim_istrain in enumerate(self.args.text_features):
+            current_feat_dim = vector_id_dim_istrain[2]
+            end_dim= begin_dim + current_feat_dim
+
+            for word_idx, word in enumerate(self.text_features[feat_idx][i].split()[:self.args.block_size]):
                 text_masks[word_idx]=1
-                if random.random()<self.args.mlm_probability:
-                    if word in self.args.vocab[idx]:
-                        text_label[word_idx,idx]=self.args.vocab[idx][word]
+                if random.random()<self.args.mlm_probability: # 20%的需要进行mask
+                    if word in self.args.vocab[feat_idx]:
+                        text_label[word_idx, feat_idx]=self.args.vocab[feat_idx][word]
                     else:
-                        text_label[word_idx,idx]=0
+                        text_label[word_idx, feat_idx]=0
+
                     if random.random()<0.8:
-                        text_ids[word_idx,idx]=self.args.vocab_dic['mask']
-                    elif random.random()<0.5:
-                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][word]
+                        text_ids[word_idx, feat_idx]=self.args.vocab_dic['mask'] # 80%的设为mask
+                    elif random.random()<0.5: # 剩下的20%中的50%即为10%保持不变
+                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[feat_idx][word]
                         try:
-                            text_ids[word_idx,idx]=self.args.vocab_dic[(x[1],word)]
+                            text_ids[word_idx, feat_idx]=self.args.vocab_dic[(vector_id_dim_istrain[1], word)]
                         except:
-                            text_ids[word_idx,idx]=self.args.vocab_dic['unk']
-                    else:
+                            text_ids[word_idx, feat_idx]=self.args.vocab_dic['unk']
+                    else:# 剩下的10%随机选择
                         while True:
-                            random_word=random.sample(self.vocab[idx],1)[0]
+                            random_word=random.sample(self.vocab[feat_idx], 1)[0]
                             if random_word!=word:
                                 break
-                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][random_word] 
+
+                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[feat_idx][random_word]
                         try:
-                            text_ids[word_idx,idx]=self.args.vocab_dic[(x[1],random_word)]
+                            text_ids[word_idx, feat_idx]=self.args.vocab_dic[(vector_id_dim_istrain[1], random_word)]
                         except:
-                            text_ids[word_idx,idx]=self.args.vocab_dic['unk']
-                else:
+                            text_ids[word_idx, feat_idx]=self.args.vocab_dic['unk']
+                else: # 其余80%的保持原样不变
                     try:
-                        text_ids[word_idx,idx]=self.args.vocab_dic[(x[1],word)]
+                        text_ids[word_idx, feat_idx]=self.args.vocab_dic[(vector_id_dim_istrain[1], word)]
                     except:
-                        text_ids[word_idx,idx]=self.args.vocab_dic['unk']
-                    text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][word]
+                        text_ids[word_idx, feat_idx]=self.args.vocab_dic['unk']
+                    text_features[word_idx,begin_dim:end_dim]=self.embedding_table[feat_idx][word]
+
             begin_dim=end_dim 
-        return  torch.tensor(text_features),torch.tensor(text_ids),torch.tensor(text_masks),torch.tensor(text_label)
+        return  torch.tensor(text_features),\
+                torch.tensor(text_ids),\
+                torch.tensor(text_masks),\
+                torch.tensor(text_label)
     
 def set_seed(args):
     random.seed(args.seed)
@@ -114,7 +125,7 @@ def set_seed(args):
     if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
-def train(args, train_dataset,dev_dataset, model):
+def train(args, train_dataset, dev_dataset, bert_model):
     #设置dataloader
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset)
@@ -123,40 +134,49 @@ def train(args, train_dataset,dev_dataset, model):
     args.num_train_epochs = args.max_steps // (len(train_dataloader) // args.gradient_accumulation_steps) + 1
 
     #设置优化器
-    model.to(args.device)
+    bert_model.to(args.device)
     if args.local_rank not in [-1, 0]:
-        torch.distributed.barrier()     
+        torch.distributed.barrier()
+
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+        {'params': [p for n, p in bert_model.named_parameters() if not any(nd in n for nd in no_decay)],
          'weight_decay': args.weight_decay},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        {'params': [p for n, p in bert_model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
+
+    optimizer = AdamW(optimizer_grouped_parameters,
+                      lr=args.learning_rate,
+                      eps=args.adam_epsilon)
+
+    scheduler = get_linear_schedule_with_warmup(optimizer,
+                                                num_warmup_steps=args.warmup_steps,
                                                 num_training_steps=t_total)
 
     checkpoint_last = os.path.join(args.output_dir, 'checkpoint-last')
     scheduler_last = os.path.join(checkpoint_last, 'scheduler.pt')
     optimizer_last = os.path.join(checkpoint_last, 'optimizer.pt')
+
     if os.path.exists(scheduler_last):
         scheduler.load_state_dict(torch.load(scheduler_last, map_location="cpu"))
+
     if os.path.exists(optimizer_last):
-        optimizer.load_state_dict(torch.load(optimizer_last, map_location="cpu"))    
+        optimizer.load_state_dict(torch.load(optimizer_last, map_location="cpu"))
+
     if args.local_rank == 0:
-        torch.distributed.barrier()         
+        torch.distributed.barrier()
+
     if args.fp16:
         try:
             from apex import amp
         except ImportError:
             raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use fp16 training.")
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.fp16_opt_level)
+        bert_model, optimizer = amp.initialize(bert_model, optimizer, opt_level=args.fp16_opt_level)
 
     # 多GPU设置
     if args.n_gpu > 1:
-        model = torch.nn.DataParallel(model)
+        bert_model = torch.nn.DataParallel(module=bert_model) # 与tensorflow中不一样的是, pytorch中的model可以直接被其他的Data层接受
 
- 
     # 训练
     logger.info("***** Running training *****")
     logger.info("  Num examples = %d", len(train_dataset)* (
@@ -171,14 +191,15 @@ def train(args, train_dataset,dev_dataset, model):
     
     global_step = args.start_step
     tr_loss, logging_loss,avg_loss,tr_nb = 0.0, 0.0,0.0,0
-    model.zero_grad()
+    bert_model.zero_grad()
     set_seed(args)
  
     for idx in range(args.start_epoch, int(args.num_train_epochs)): 
         for step, batch in enumerate(train_dataloader):
-            inputs,inputs_ids,masks,labels = [x.to(args.device) for x in batch]   
-            model.train()
-            loss = model(inputs,inputs_ids,masks,labels)
+            inputs, inputs_ids,masks,labels = [x.to(args.device) for x in batch]
+            bert_model.train()
+            # bert前向传播
+            loss = bert_model(inputs, inputs_ids, masks, labels)
 
             if args.n_gpu > 1:
                 loss = loss.mean()
@@ -190,13 +211,11 @@ def train(args, train_dataset,dev_dataset, model):
                     scaled_loss.backward()
                 torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)
             else:
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                loss.backward() # 反向传播,计算梯度
+                torch.nn.utils.clip_grad_norm_(bert_model.parameters(), args.max_grad_norm)
 
             tr_loss += loss.item()
-            
-   
-            
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
@@ -215,7 +234,7 @@ def train(args, train_dataset,dev_dataset, model):
                 if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0:
                     checkpoint_prefix = 'checkpoint'
                     if args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
-                        results = evaluate(args, model, dev_dataset)
+                        results = evaluate(args, bert_model, dev_dataset)
                         for key, value in results.items():
                             logger.info("  %s = %s", key, round(value,4))                    
                         # Save ctr_model checkpoint
@@ -225,15 +244,15 @@ def train(args, train_dataset,dev_dataset, model):
                         os.makedirs(output_dir)
 
                     #保存模型
-                    model_to_save = model.module.encoder if hasattr(model,'module') else model.encoder  # Take care of distributed/parallel training
+                    model_to_save = bert_model.module.encoder if hasattr(bert_model, 'module') else bert_model.encoder  # Take care of distributed/parallel training
                     model_to_save.save_pretrained(output_dir)
                     logger.info("Saving ctr_model checkpoint to %s", output_dir)
                     
                     logger.info("Saving linear to %s",os.path.join(args.output_dir, "linear.bin"))  
-                    model_to_save_linear = model.module.text_linear if hasattr(model, 'module') else model.text_linear
+                    model_to_save_linear = bert_model.module.text_linear if hasattr(bert_model, 'module') else bert_model.text_linear
                     torch.save(model_to_save_linear.state_dict(), os.path.join(output_dir, "linear.bin"))
                     logger.info("Saving embeddings to %s",os.path.join(args.output_dir, "embeddings.bin"))  
-                    model_to_save_embeddings = model.module.text_embeddings if hasattr(model, 'module') else model.text_embeddings
+                    model_to_save_embeddings = bert_model.module.text_embeddings if hasattr(bert_model, 'module') else bert_model.text_embeddings
                     torch.save(model_to_save_embeddings.state_dict(), os.path.join(output_dir, "embeddings.bin"))
                     
                     
@@ -241,14 +260,17 @@ def train(args, train_dataset,dev_dataset, model):
                     if not os.path.exists(last_output_dir):
                         os.makedirs(last_output_dir)
                     model_to_save.save_pretrained(last_output_dir)
+
                     logger.info("Saving linear to %s",os.path.join(last_output_dir, "linear.bin"))  
-                    model_to_save_linear = model.module.text_linear if hasattr(model, 'module') else model.text_linear
+                    model_to_save_linear = bert_model.module.text_linear if hasattr(bert_model, 'module') else bert_model.text_linear
                     torch.save(model_to_save_linear.state_dict(), os.path.join(last_output_dir, "linear.bin"))
+
                     logger.info("Saving embeddings to %s",os.path.join(last_output_dir, "embeddings.bin"))  
-                    model_to_save_embeddings = model.module.text_embeddings if hasattr(model, 'module') else model.text_embeddings
+                    model_to_save_embeddings = bert_model.module.text_embeddings if hasattr(bert_model, 'module') else bert_model.text_embeddings
                     torch.save(model_to_save_embeddings.state_dict(), os.path.join(last_output_dir, "embeddings.bin"))
+
                     logger.info("Saving ctr_model to %s",os.path.join(last_output_dir, "ctr_model.bin"))
-                    model_to_save = model.module if hasattr(model, 'module') else model
+                    model_to_save = bert_model.module if hasattr(bert_model, 'module') else bert_model
                     torch.save(model_to_save.state_dict(), os.path.join(last_output_dir, "ctr_model.bin"))
 
 
@@ -262,25 +284,25 @@ def train(args, train_dataset,dev_dataset, model):
                     step_file = os.path.join(last_output_dir, 'step_file.txt')
                     with open(step_file, 'w', encoding='utf-8') as stepf:
                         stepf.write(str(global_step) + '\n')
+
             if args.max_steps > 0 and global_step > args.max_steps:
                 break
         if args.max_steps > 0 and global_step > args.max_steps:
             break
 
-
-
-def evaluate(args,  model, eval_dataset):
+def evaluate(args, bert_model, eval_dataset):
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
     eval_sampler = SequentialSampler(eval_dataset)
     eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,num_workers=4)
 
     eval_loss = 0.0
     nb_eval_steps = 0
-    model.eval()      
+    bert_model.eval()
     for batch in eval_dataloader:
-        inputs,inputs_ids,masks,labels = [x.to(args.device) for x in batch]       
-        with torch.no_grad():
-            lm_loss = model(inputs,inputs_ids,masks,labels)
+        inputs,inputs_ids,masks,labels = [x.to(args.device) for x in batch]
+
+        with torch.no_grad(): # 验证的时候,不需要梯度
+            lm_loss = bert_model(inputs, inputs_ids, masks, labels)
             eval_loss += lm_loss.mean().item()
         nb_eval_steps += 1
 
@@ -293,10 +315,6 @@ def evaluate(args,  model, eval_dataset):
     
     return result
 
-
-        
-        
-        
 def main():
     parser = argparse.ArgumentParser()
 
@@ -406,7 +424,6 @@ def main():
     logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
                    args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
 
-
     # 设置随机种子
     set_seed(args)
 
@@ -424,14 +441,12 @@ def main():
 
         logger.info("reload ctr_model from {}, resume from {} epoch".format(checkpoint_last, args.start_epoch))
 
-    
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
 
-
     base_path="../data"
-    text_features=[      
-        [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True],
-        [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True],
+    vector_id_dim=[
+        [base_path+"/sequence_text_user_id_product_id.128d",'sequence_text_user_id_product_id',128,True], # word2vec向量, product_id, 向量维度, 是否训练
+        [base_path+"/sequence_text_user_id_ad_id.128d",'sequence_text_user_id_ad_id',128,True], # word2vec向量, user_id_ad_id, 向量维度
         [base_path+"/sequence_text_user_id_creative_id.128d",'sequence_text_user_id_creative_id',128,True],
         [base_path+"/sequence_text_user_id_advertiser_id.128d",'sequence_text_user_id_advertiser_id',128,True],
         [base_path+"/sequence_text_user_id_industry.128d",'sequence_text_user_id_industry',128,True],
@@ -443,6 +458,7 @@ def main():
     #读取训练数据
     train_df=pd.read_pickle(os.path.join(base_path,'train_user.pkl'))
     test_df=pd.read_pickle(os.path.join(base_path,'test_user.pkl'))
+
     dev_data=train_df.iloc[-10000:]
     train_data=train_df.iloc[:-10000].append(test_df)  
     
@@ -454,22 +470,22 @@ def main():
         dic['pad']=0
         dic['mask']=1
         dic['unk']=2    
-        for feature in text_features: 
+        for feature in vector_id_dim:
             counter=Counter()
-            for item in train_df[feature[1]].values:
-                for word in item.split():
+            for ids in train_df[feature[1]].values:
+                for word in ids.split():
                     try:
                         counter[(feature[1], word)]+=1
                     except:
                         counter[(feature[1], word)]=1
             most_common=counter.most_common(100000)
             cont=0
-            for x in most_common:
-                if x[1]>5:
-                    dic[x[0]]=len(dic)
+            for word_and_count in most_common:
+                if word_and_count[1]>5:
+                    dic[word_and_count[0]]=len(dic)
                     cont+=1
                     if cont<10:
-                        print(x[0],dic[x[0]])
+                        print(word_and_count[0], dic[word_and_count[0]])
             print(cont)
      
     #读取或重新创建BERT   
@@ -482,6 +498,7 @@ def main():
                                             cache_dir=args.cache_dir if args.cache_dir else None)   
         args.text_dim=config.hidden_size
     else:
+        # 重新训练
         config = RobertaConfig()        
         config.num_hidden_layers=12
         config.hidden_size=512
@@ -501,53 +518,45 @@ def main():
     #读取word embedding
     import gensim
     embedding_table=[]
-    for x in text_features:
-        print(x)
-        embedding_table.append(pickle.load(open(x[0],'rb')))
+    for word_and_count in vector_id_dim:
+        print(word_and_count)
+        # 加载word2vector向量
+        embedding_table.append(pickle.load(open(word_and_count[0], 'rb')))
 
     #创建输出端词表，每个域最多保留10w个id
-    vocab=[]
-    for feature in text_features:
+    vocab_size_list=[]
+    for feature in vector_id_dim:
         counter=Counter()
-        for item in train_data[feature[1]].values:
-            for word in item.split():
+        for ids in train_data[feature[1]].values: # item_id,这些id有可能是user_id,ad_id等
+            for word in ids.split():
                 try:
                     counter[word]+=1
                 except:
                     counter[word]=1
-        most_common=counter.most_common(100000)
+        most_common=counter.most_common(100000)# 最多保留10w个
         dic={}
-        for idx,x in enumerate(most_common):
-            dic[x[0]]=idx+1    
-        vocab.append(dic)
+        for idx, word_and_count in enumerate(most_common):
+            dic[word_and_count[0]]= idx + 1
+        # 每个不同的特征,它的们的vocab size不一样
+        vocab_size_list.append(dic)
      
     #设置参数  
     args.vocab_size_v1=config.vocab_size_v1
     args.vocab_dim_v1=config.vocab_dim_v1
-    args.vocab=vocab
-    args.text_dim=sum([x[2] for x in text_features])
-    args.text_features=text_features
-    train_dataset=TextDataset(args,train_data,embedding_table)
-    dev_dataset=TextDataset(args,dev_data,embedding_table)
-    args.vocab_size=[len(x)+1 for x in vocab]
+    args.vocab=vocab_size_list
+    args.text_dim=sum([x[2] for x in vector_id_dim])
+    args.vector_id_dim=vector_id_dim
+    train_dataset=TextDataset(args, train_data, embedding_table)
+    dev_dataset=TextDataset(args, dev_data, embedding_table)
+    args.vocab_size=[len(x)+1 for x in vocab_size_list]
     #创建模型
-    model=Model(model,config,args)   
+    bert_model=BertModel(bert_encoder=model, config=config, args=args)
     #如果有checkpoint，读取checkpoint
     if os.path.exists(checkpoint_last) and os.listdir(checkpoint_last):
         logger.info("Load ctr_model from %s",os.path.join(checkpoint_last, "ctr_model.bin"))
-        model.load_state_dict(torch.load(os.path.join(checkpoint_last, "ctr_model.bin")))
-
-    #训练      
-    train(args, train_dataset,dev_dataset, model)
-
+        bert_model.load_state_dict(torch.load(os.path.join(checkpoint_last, "ctr_model.bin")))
+    #训练
+    train(args, train_dataset, dev_dataset, bert_model)
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
