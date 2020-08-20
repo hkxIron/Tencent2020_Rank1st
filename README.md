@@ -88,7 +88,7 @@ rm -r w2v*
 ```shell
 cd BERT
 mkdir saved_models
-python run.py \
+python pretrain_bert.py \
     --output_dir saved_models \
     --model_type roberta \
     --config_name roberta-base \
@@ -133,7 +133,7 @@ mkdir saved_models
 mkdir saved_models/log
 for((i=0;i<5;i++));  
 do  
-  python run.py \
+  python train_classifier.py \
       --kfold=5 \
       --index=$i \
       --train_batch_size=256 \

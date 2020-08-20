@@ -67,10 +67,10 @@ class TextDataset(Dataset):
         return len(self.text_features[0])
 
     def __getitem__(self, i):  
-        text_features=np.zeros((self.args.block_size,self.args.text_dim))
-        text_ids=np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)
-        text_masks=np.zeros(self.args.block_size)
-        text_label=np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)-100
+        text_features=np.zeros((self.args.block_size, self.args.text_dim)) # text_features:[batch, dim]
+        text_ids=np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64) # text_ids:[batch, seq_length]
+        text_masks=np.zeros(self.args.block_size) # text_masks:[batch]
+        text_label=np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)-100  # text_label:[batch, seq_length]
         begin_dim=0
 
         #选择20%的token进行掩码，其中80%设为[mask], 10%保持不变,10%随机选择
@@ -89,6 +89,7 @@ class TextDataset(Dataset):
                     if random.random()<0.8:
                         text_ids[word_idx, feat_idx]=self.args.vocab_dic['mask'] # 80%的设为mask
                     elif random.random()<0.5: # 剩下的20%中的50%即为10%保持不变
+                        # text_features:[feature_num, embeddings]
                         text_features[word_idx,begin_dim:end_dim]=self.embedding_table[feat_idx][word]
                         try:
                             text_ids[word_idx, feat_idx]=self.args.vocab_dic[(vector_id_dim_istrain[1], word)]
@@ -97,10 +98,10 @@ class TextDataset(Dataset):
                     else:# 剩下的10%随机选择
                         while True:
                             random_word=random.sample(self.vocab[feat_idx], 1)[0]
-                            if random_word!=word:
-                                break
+                            # 随机时不能为当前词
+                            if random_word!=word: break
 
-                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[feat_idx][random_word]
+                        text_features[word_idx,begin_dim:end_dim] = self.embedding_table[feat_idx][random_word]
                         try:
                             text_ids[word_idx, feat_idx]=self.args.vocab_dic[(vector_id_dim_istrain[1], random_word)]
                         except:
