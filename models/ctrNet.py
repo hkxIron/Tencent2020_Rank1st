@@ -204,21 +204,21 @@ class ctrNet(nn.Module):
     def infer(self, eval_dataset):
         # 预测年龄和性别的概率分布
         args = self.args
-        model = self.classify_model
+        classify_model = self.classify_model
         eval_sampler = SequentialSampler(eval_dataset)
         eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size, num_workers=4)
         eval_loss = 0.0
         nb_eval_steps = 0
         age_probs = []
         gender_probs = []
-        model.eval()
+        classify_model.eval()
         for batch in eval_dataloader:
             _, dense_features, text_features, text_ids, text_masks, text_features_1, text_masks_1 = (x.to(args.device)
                                                                                                      for x in batch)
             with torch.no_grad():
                 # forward前向传播
-                probs_1, probs_2 = model(dense_features, text_features, text_ids, text_masks, text_features_1,
-                                         text_masks_1)
+                probs_1, probs_2 = classify_model(dense_features, text_features, text_ids, text_masks, text_features_1,
+                                                  text_masks_1)
 
             age_probs.append(probs_1.cpu().numpy())
             gender_probs.append(probs_2.cpu().numpy())
