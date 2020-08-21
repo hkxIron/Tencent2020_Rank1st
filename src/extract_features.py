@@ -10,7 +10,6 @@ from gensim.models import Word2Vec
 from sklearn import preprocessing
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler, StandardScaler
 
-
 def get_agg_features(dfs, group_key, stat_value, agg, log):
     # 判定特殊情况
     if type(group_key) == str:
@@ -41,12 +40,14 @@ def get_agg_features(dfs, group_key, stat_value, agg, log):
         tmp = pd.DataFrame(data.groupby(group_key)[stat_value].median()).reset_index()
     else:
         raise "agg error"
-        # 赋值聚合特征
+
+    # 赋值聚合特征
     for df in dfs:
         try:
             del df[f_name]
         except:
             pass
+        # 列名加一下当前的group key
         tmp.columns = group_key + [f_name]
         df[f_name] = df.merge(tmp, on=group_key, how='left')[f_name]
     del tmp
@@ -54,38 +55,43 @@ def get_agg_features(dfs, group_key, stat_value, agg, log):
     gc.collect()
     return [f_name]
 
-
-def sequence_text(dfs, f1, f2, log):
-    f_name = 'sequence_text_' + f1 + '_' + f2
-    print(f_name)
+def sequence_text(dfs, user_feat="user_id", item_feat="ad_id", log:pd.DataFrame=None):
+    seq_feature_name = 'sequence_text_' + user_feat + '_' + item_feat
+    print(seq_feature_name)
     # 遍历log，获得用户的点击序列
-    dic, items = {}, []
-    for item in log[[f1, f2]].values:
+    user_item_dict, items = {}, []
+    for (user, item) in log[[user_feat, item_feat]].values:
+        #user = item[0] # 比如为user_id
+        #value1 = item[1] # 该用户所点击的 ad_id
         try:
-            dic[item[0]].append(str(item[1]))
+            user_item_dict[user].append(str(item))
         except:
-            dic[item[0]] = [str(item[1])]
-    for key in dic:
-        items.append([key, ' '.join(dic[key])])
+            user_item_dict[user] = [str(item)]
+    # 将用户所点击的所有序列join起来,形成序列特征
+    for user in user_item_dict:
+        items.append([user, ' '.join(user_item_dict[user])])
+
     # 赋值序列特征
     temp = pd.DataFrame(items)
-    temp.columns = [f1, f_name]
-    temp = temp.drop_duplicates(f1)
+    temp.columns = [user_feat, seq_feature_name] # user_id, seq_text_userid_adid
+    temp = temp.drop_duplicates(subset=user_feat) # 以user维度去重
+
     for df in dfs:
         try:
-            del df[f_name]
+            del df[seq_feature_name] # 删除原始dataframe中的序列特征
         except:
             pass
-        temp.columns = [f1] + [f_name]
-        df[f_name] = df.merge(temp, on=f1, how='left')[f_name]
+        temp.columns = [user_feat] + [seq_feature_name]
+        # 以用户为维度进行join, 并生成新的序列特征
+        df[seq_feature_name] = df.merge(temp, on=user_feat, how='left')[seq_feature_name]
+
     gc.collect()
     del temp
     del items
-    del dic
-    return [f_name]
+    del user_item_dict
+    return [seq_feature_name]
 
-
-def kfold(train_df, test_df, log_data, pivot):
+def kfold_stat(train_df, test_df, log_data, pivot):
     # 先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
     kfold_features = ['age_{}'.format(i) for i in range(10)] + ['gender_{}'.format(i) for i in range(2)]
     log = log_data[kfold_features + ['user_id', pivot, 'fold']]
@@ -96,6 +102,7 @@ def kfold(train_df, test_df, log_data, pivot):
         tmp.columns = [pivot] + kfold_features
         tmp['fold'] = fold
         tmps.append(tmp)
+
     tmp = pd.concat(tmps, axis=0).reset_index()
     tmp = log[['user_id', pivot, 'fold']].merge(tmp, on=[pivot, 'fold'], how='left')
     del log
@@ -114,7 +121,6 @@ def kfold(train_df, test_df, log_data, pivot):
     del tmp
     del tmp_mean
     gc.collect()
-
 
 def kfold_sequence(train_df, test_df, log_data, pivot):
     # 先对log做kflod统计，统计每条记录中pivot特征的性别年龄分布
@@ -198,13 +204,16 @@ if __name__ == "__main__":
     print("Extracting sequence feature done!")
     print("List sequence feature names:")
     print(text_features)
+
     ################################################################################
     # 获取K折统计特征，求出用户点击的所有记录的年龄性别平均分布
     # 赋值index,训练集为0-4，测试集为5
     print("Extracting Kflod feature...")
-    log = click_log.drop_duplicates(['user_id', 'creative_id']).reset_index(drop=True)
+    log = click_log.drop_duplicates(['user_id', 'creative_id'])\
+        .reset_index(drop=True)
     del click_log
     gc.collect()
+
     log['cont'] = 1
     train_df['fold'] = train_df.index % 5
     test_df['fold'] = 5
@@ -212,10 +221,12 @@ if __name__ == "__main__":
     log = log.merge(df, on='user_id', how='left')
     del df
     gc.collect()
+
     # 获取用户点击某特征的年龄性别平均分布
     for pivot in ['creative_id', 'ad_id', 'product_id', 'advertiser_id', 'industry']:
         print("Kfold", pivot)
-        kfold(train_df, test_df, log, pivot)
+        kfold_stat(train_df, test_df, log, pivot)
+
     del log
     gc.collect()
     print("Extracting Kflod feature done!")

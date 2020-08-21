@@ -16,7 +16,6 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 
-
 # 将bert与 transformer模型融合
 class ClassifyModel(nn.Module):
     def __init__(self, args):
@@ -67,8 +66,15 @@ class ClassifyModel(nn.Module):
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=0.02)
 
-    def forward(self, dense_features, text_features, text_ids, text_masks, fusion_text_features, fusion_text_masks,
+    def forward(self,
+                dense_features,
+                text_features,
+                text_ids,
+                text_masks,
+                fusion_text_features,
+                fusion_text_masks,
                 labels=None):
+
         outputs = []
         # 获取浮点数，作为分类器的输入
         outputs.append(dense_features.float())
@@ -78,37 +84,22 @@ class ClassifyModel(nn.Module):
         text_embedding = self.text_embeddings(text_ids).view(text_ids.size(0), text_ids.size(1), -1)  # reshape
         text_features = torch.cat((text_features.float(), text_embedding), -1)  # concat
         text_features = torch.relu(self.text_linear(self.dropout(text_features)))  # relu
-        hidden_states = self.bert_text_layer(inputs_embeds=text_features, attention_mask=text_masks)[
-            0]  # bert_text_layer
+        hidden_states = self.bert_text_layer(inputs_embeds=text_features, attention_mask=text_masks)[0]  # bert_text_layer
 
         embed_mean = (hidden_states * text_masks.unsqueeze(-1)).sum(1) / text_masks.sum(1).unsqueeze(-1)
         embed_mean = embed_mean.float()
         embed_max = hidden_states + (1 - text_masks).unsqueeze(-1) * (-1e10)
         embed_max = embed_max.max(1)[0].float()
-        # t
-        git 
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        git st
+        # bert的embedding的mean, max作为分类器的输入
         outputs.append(embed_mean)
         outputs.append(embed_max)
 
         # 获取fusion-layer的hidden state，并且做max pooling和mean pooling作为分类器的输入
         fusion_text_masks = fusion_text_masks.float()
         fusion_text_features = torch.cat((fusion_text_features.float(), hidden_states), -1)
-        bs, le, dim = fusion_text_features.size()
-        fusion_text_features = self.norm(fusion_text_features.view(-1, dim)).view(bs, le, dim)
+        batch, seq_length, embedding_dim = fusion_text_features.size()
+        fusion_text_features = self.norm(fusion_text_features.view(-1, embedding_dim))\
+            .view(batch, seq_length, embedding_dim)
         fusion_text_features = torch.relu(self.text_linear_1(fusion_text_features))
         hidden_states = self.fusion_text_layer(inputs_embeds=fusion_text_features,
                                                attention_mask=fusion_text_masks)[0]  # transfromer fusion
@@ -119,7 +110,7 @@ class ClassifyModel(nn.Module):
         outputs.append(embed_mean)
         outputs.append(embed_max)
 
-        # 将特征输入分类器，得到20分类的logits
+        # 将特征(bert max/mean pooling+fusion layer)输入分类器，得到20分类的logits
         # 年龄10维,性别2维,交叉之后就是20维
         final_hidden_state = torch.cat(outputs, dim=-1)
         logits = self.classifierHead(final_hidden_state)
@@ -130,11 +121,13 @@ class ClassifyModel(nn.Module):
             loss = loss_fct(logits, labels)
             return loss
         else:
+            # prob:[batch, age, gender]
             prob = torch.softmax(logits, -1)
-            age_probs = prob.view(-1, 10, 2).sum(2)
+            # age_probs:[batch, age], 将每个age下的各个gender相加就可以得到该age的概率
+            age_probs = prob.view(-1, 10, 2).sum(dim=2,keepdims=False)
+            # gender_probs:[batch, gender]
             gender_probs = prob.view(-1, 10, 2).sum(1)
             return age_probs, gender_probs
-
 
 class ClassificationHead(nn.Module):
     """Head for sentence-level classification tasks."""
@@ -147,7 +140,8 @@ class ClassificationHead(nn.Module):
         self.dropout = nn.Dropout(args.hidden_dropout_prob)
         self.dense_1 = nn.Linear(in_features=args.linear_layer_size[0], out_features=args.linear_layer_size[1])
         self.batch_norm_2 = nn.BatchNorm1d(args.linear_layer_size[1])
-        self.out_proj = nn.Linear(in_features=args.linear_layer_size[1], out_features=args.num_label)
+        # out_proj:[batch, num_label=20]
+        self.out_proj = nn.Linear(in_features=args.linear_layer_size[1], out_features=args.num_label) # 20维
 
     def forward(self, features, **kwargs):
         x = self.norm(features)

@@ -18,7 +18,6 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 
-
 # 设置随机种子
 def set_seed(args):
     random.seed(args.seed)
@@ -26,7 +25,6 @@ def set_seed(args):
     torch.manual_seed(args.seed)
     if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
-
 
 class ctrNet(nn.Module):
     def __init__(self, args):
