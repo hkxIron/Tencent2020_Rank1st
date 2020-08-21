@@ -73,7 +73,6 @@ class TextDataset(Dataset):
         text_label=np.zeros((self.args.block_size, len(self.args.text_features)), dtype=np.int64)-100  # text_label:[batch, seq_length]
         begin_dim=0
 
-<<<<<<< Updated upstream:BERT/pretrain_bert.py
         #选择20%的token进行掩码，其中80%设为[mask], 10%保持不变,10%随机选择
         for feat_idx, vector_id_dim_istrain in enumerate(self.args.text_features):
             current_feat_dim = vector_id_dim_istrain[2]
@@ -92,24 +91,6 @@ class TextDataset(Dataset):
                     elif random.random()<0.5: # 剩下的20%中的50%即为10%保持不变
                         # text_features:[feature_num, embeddings]
                         text_features[word_idx,begin_dim:end_dim]=self.embedding_table[feat_idx][word]
-=======
-        #选择20%的token进行掩码，其中80%设为[mask], 10%设为[UNK],10%随机选择
-        for idx,x in enumerate(self.args.text_features):
-            end_dim=begin_dim+x[2]
-            for word_idx, word in enumerate(self.text_features[idx][i].split()[:self.args.block_size]):
-                text_masks[word_idx]=1
-                if random.random()<self.args.mlm_probability: # 20%的需要进行mask
-                    if word in self.args.vocab[idx]:
-                        text_label[word_idx,idx]=self.args.vocab[idx][word]
-                    else:
-                        text_label[word_idx,idx]=0
-
-                    if random.random()<0.8:
-                        text_ids[word_idx,idx]=self.args.vocab_dic['mask'] # 80%的设为mask
-
-                    elif random.random()<0.5:
-                        text_features[word_idx,begin_dim:end_dim]=self.embedding_table[idx][word]
->>>>>>> Stashed changes:BERT/run.py
                         try:
                             text_ids[word_idx, feat_idx]=self.args.vocab_dic[(vector_id_dim_istrain[1], word)]
                         except:
