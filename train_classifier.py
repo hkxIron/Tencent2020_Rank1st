@@ -34,7 +34,7 @@ for l in ['age_{}'.format(i) for i in range(10)] + ['gender_{}'.format(i) for i 
 
 # 定义用户点击的序列特征
 text_features_flie_and_dim = [
-    [base_path + "/sequence_text_user_id_product_id.128d", 'sequence_text_user_id_product_id', 128],
+    [base_path + "/sequence_text_user_id_product_id.128d", 'sequence_text_user_id_product_id', 128], # product_id embedding, product_id, embedding dim
     [base_path + "/sequence_text_user_id_ad_id.128d", 'sequence_text_user_id_ad_id', 128],
     [base_path + "/sequence_text_user_id_creative_id.128d", 'sequence_text_user_id_creative_id', 128],
     [base_path + "/sequence_text_user_id_advertiser_id.128d", 'sequence_text_user_id_advertiser_id', 128],
