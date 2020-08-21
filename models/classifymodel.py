@@ -57,8 +57,8 @@ class ClassifyModel(nn.Module):
         args.out_size += 1024
 
         # 创建分类器，随机初始化
-        self.classifier = ClassificationHead(args)
-        self.classifier.apply(self._init_weights)
+        self.classifierHead = ClassificationHead(args)
+        self.classifierHead.apply(self._init_weights)
 
     def _init_weights(self, module):
         """ Initialize the weights """
@@ -67,7 +67,8 @@ class ClassifyModel(nn.Module):
             # cf https://github.com/pytorch/pytorch/pull/5617
             module.weight.data.normal_(mean=0.0, std=0.02)
 
-    def forward(self, dense_features, text_features, text_ids, text_masks, text_features_1, text_masks_1, labels=None):
+    def forward(self, dense_features, text_features, text_ids, text_masks, fusion_text_features, fusion_text_masks,
+                labels=None):
         outputs = []
         # 获取浮点数，作为分类器的输入
         outputs.append(dense_features.float())
@@ -77,33 +78,51 @@ class ClassifyModel(nn.Module):
         text_embedding = self.text_embeddings(text_ids).view(text_ids.size(0), text_ids.size(1), -1)  # reshape
         text_features = torch.cat((text_features.float(), text_embedding), -1)  # concat
         text_features = torch.relu(self.text_linear(self.dropout(text_features)))  # relu
-        hidden_states = self.bert_text_layer(inputs_embeds=text_features, attention_mask=text_masks)[0]  # bert_text_layer
+        hidden_states = self.bert_text_layer(inputs_embeds=text_features, attention_mask=text_masks)[
+            0]  # bert_text_layer
 
-        embed_mean = (hidden_states * text_masks.unsqueeze(-1)).sum(dim=1) / text_masks.sum(1).unsqueeze(dim=-1)
+        embed_mean = (hidden_states * text_masks.unsqueeze(-1)).sum(1) / text_masks.sum(1).unsqueeze(-1)
         embed_mean = embed_mean.float()
         embed_max = hidden_states + (1 - text_masks).unsqueeze(-1) * (-1e10)
         embed_max = embed_max.max(1)[0].float()
+        # t
+        git 
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        git st
         outputs.append(embed_mean)
         outputs.append(embed_max)
 
         # 获取fusion-layer的hidden state，并且做max pooling和mean pooling作为分类器的输入
-        text_masks_1 = text_masks_1.float()
-        text_features_1 = torch.cat((text_features_1.float(), hidden_states), -1)
-        bs, le, dim = text_features_1.size()
-        text_features_1 = self.norm(text_features_1.view(-1, dim)).view(bs, le, dim)
-        text_features_1 = torch.relu(self.text_linear_1(text_features_1))
-        hidden_states = self.fusion_text_layer(inputs_embeds=text_features_1, attention_mask=text_masks_1)[
-            0]  # transfromer fusion
-        embed_mean = (hidden_states * text_masks_1.unsqueeze(-1)).sum(1) / text_masks_1.sum(1).unsqueeze(-1)
+        fusion_text_masks = fusion_text_masks.float()
+        fusion_text_features = torch.cat((fusion_text_features.float(), hidden_states), -1)
+        bs, le, dim = fusion_text_features.size()
+        fusion_text_features = self.norm(fusion_text_features.view(-1, dim)).view(bs, le, dim)
+        fusion_text_features = torch.relu(self.text_linear_1(fusion_text_features))
+        hidden_states = self.fusion_text_layer(inputs_embeds=fusion_text_features,
+                                               attention_mask=fusion_text_masks)[0]  # transfromer fusion
+        embed_mean = (hidden_states * fusion_text_masks.unsqueeze(-1)).sum(1) / fusion_text_masks.sum(1).unsqueeze(-1)
         embed_mean = embed_mean.float()
-        embed_max = hidden_states + (1 - text_masks_1).unsqueeze(-1) * (-1e10)
+        embed_max = hidden_states + (1 - fusion_text_masks).unsqueeze(-1) * (-1e10)
         embed_max = embed_max.max(1)[0].float()
         outputs.append(embed_mean)
         outputs.append(embed_max)
 
         # 将特征输入分类器，得到20分类的logits
+        # 年龄10维,性别2维,交叉之后就是20维
         final_hidden_state = torch.cat(outputs, dim=-1)
-        logits = self.classifier(final_hidden_state)
+        logits = self.classifierHead(final_hidden_state)
 
         # 返回loss或概率结果
         if labels is not None:

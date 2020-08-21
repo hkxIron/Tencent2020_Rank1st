@@ -85,20 +85,25 @@ class ctrNet(nn.Module):
                 x.to(args.device) for x in batch)
                 del batch
                 classify_model.train() # 设置train mode
+                # 调用model的forward函数,得到loss
                 loss = classify_model(dense_features, text_features, text_ids, text_masks, text_features_1,
                                       text_masks_1, labels)
 
                 if args.n_gpu > 1:
-                    loss = loss.mean()  # mean() to average on multi-gpu parallel training 
+                    loss = loss.mean()  # mean() to average on multi-gpu parallel training
+                # loss反向传播,得到梯度
                 loss.backward()
+                # 对模型参数的梯度进行约束
                 torch.nn.utils.clip_grad_norm_(classify_model.parameters(), args.max_grad_norm)
-                tr_loss += loss.item()
+                tr_loss += loss.item() # 得到scalar tensor的值
+
                 tr_num += 1
                 train_loss += loss.item()
 
                 # 输出log
                 if avg_loss == 0:
                     avg_loss = tr_loss
+
                 avg_loss = round(train_loss / tr_num, 5)
                 if (step + 1) % args.display_steps == 0:
                     logger.info("  epoch {} step {} loss {}".format(idx, step + 1, avg_loss))
@@ -155,7 +160,7 @@ class ctrNet(nn.Module):
                         torch.save(model_to_save.state_dict(), output_model_file)
                     logger.info("  best_acc = %s", round(best_age_acc + best_gender_acc, 4))
 
-                    # 一个epoch结束后，测试验证集结果
+            # 一个epoch结束后，测试验证集结果
             if dev_dataset is not None:
                 # 输出验证集性别和年龄的概率
                 age_probs, gender_probs = self.infer(dev_dataset)
@@ -217,15 +222,14 @@ class ctrNet(nn.Module):
                                                                                                      for x in batch)
             with torch.no_grad():
                 # forward前向传播
-                probs_1, probs_2 = classify_model(dense_features, text_features, text_ids, text_masks, text_features_1,
-                                                  text_masks_1)
+                age_, gender_ = classify_model(dense_features, text_features, text_ids, text_masks, text_features_1,
+                                               text_masks_1)
 
-            age_probs.append(probs_1.cpu().numpy())
-            gender_probs.append(probs_2.cpu().numpy())
+            age_probs.append(age_.cpu().numpy())
+            gender_probs.append(gender_.cpu().numpy())
 
         age_probs = np.concatenate(age_probs, 0)
         gender_probs = np.concatenate(gender_probs, 0)
-
         return age_probs, gender_probs
 
     def eval(self, labels, preds):
