@@ -29,8 +29,8 @@ dense_features = ['user_id__size',
                   'user_id_click_times_std']
 
 for l in ['age_{}'.format(i) for i in range(10)] + ['gender_{}'.format(i) for i in range(2)]:
-    for feature in ['creative_id', 'ad_id', 'product_id', 'advertiser_id', 'industry']:
-        dense_features.append(l + '_' + feature + '_mean')
+    for pred_metric in ['creative_id', 'ad_id', 'product_id', 'advertiser_id', 'industry']:
+        dense_features.append(l + '_' + pred_metric + '_mean')
 
 # 定义用户点击的序列特征
 text_features_flie_and_dim = [
@@ -142,37 +142,37 @@ if __name__ == "__main__":
 
     # 输出结果
     accs = []
-    for feature, num in [('age', 10), ('gender', 2)]:
-        ctr_model.reload(feature)
-        if feature == "age":
+    for pred_metric, metric_classify_num in [('age', 10), ('gender', 2)]:
+        ctr_model.reload(pred_metric)
+        if pred_metric == "age":
             dev_preds = ctr_model.infer(dev_dataset)[0]
         else:
             dev_preds = ctr_model.infer(dev_dataset)[1]
 
-        for j in range(num):
-            dev_df['{}_{}'.format(feature, j)] = np.round(dev_preds[:, j], 4)
-        acc = ctr_model.eval(dev_df[feature].values, dev_preds)['eval_acc']
+        for j in range(metric_classify_num):
+            dev_df['{}_{}'.format(pred_metric, j)] = np.round(dev_preds[:, j], 4)
+        acc = ctr_model.eval(dev_df[pred_metric].values, dev_preds)['eval_acc']
         accs.append(acc)
 
-        if feature == "age":
+        if pred_metric == "age":
             test_preds = ctr_model.infer(test_dataset)[0]
         else:
             test_preds = ctr_model.infer(test_dataset)[1]
 
-            logger.info("Test %s %s", feature, np.mean(test_preds, 0))
-            logger.info("ACC %s %s", feature, round(acc, 5))
+            logger.info("Test %s %s", pred_metric, np.mean(test_preds, 0))
+            logger.info("ACC %s %s", pred_metric, round(acc, 5))
 
-            out_fs = ['user_id', 'age', 'gender', 'predict_{}'.format(feature)]
-            out_fs += ['{}_{}'.format(feature, i) for i in range(num)]
-            for i in range(num):
-                test_df['{}_{}'.format(feature, i)] = np.round(test_preds[:, i], 4)
-            test_df['predict_{}'.format(feature)] = np.argmax(test_preds, -1) + 1
+            out_fs = ['user_id', 'age', 'gender', 'predict_{}'.format(pred_metric)]
+            out_fs += ['{}_{}'.format(pred_metric, i) for i in range(metric_classify_num)]
+            for i in range(metric_classify_num):
+                test_df['{}_{}'.format(pred_metric, i)] = np.round(test_preds[:, i], 4)
+            test_df['predict_{}'.format(pred_metric)] = np.argmax(test_preds, -1) + 1
             try:
                 os.system("mkdir submission")
             except:
                 pass
 
-            test_df[out_fs].to_csv('submission/submission_test_{}_{}_{}.csv'.format(feature, args.index, round(acc, 5)),
+            test_df[out_fs].to_csv('submission/submission_test_{}_{}_{}.csv'.format(pred_metric, args.index, round(acc, 5)),
                                    index=False)
 
     logger.info("  best_acc = %s", round(sum(accs), 4))
